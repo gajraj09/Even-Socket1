@@ -137,7 +137,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
       state.prices.curr1m = open;
 
       if (state.prices.curr1m !== state.prices.prev1m) {
-        const direction = state.prices.curr1m > state.prices.prev1m ? "H" : "L";
+        const direction = state.prices.curr1m >= state.prices.prev1m ? "H" : "L";
         state.trend1m += direction;
 
         // Use a small delay to avoid conflict with 10m save
@@ -172,7 +172,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
       state.prices.curr10m = open;
 
       if (state.prices.curr10m !== state.prices.prev10m) {
-        const direction = state.prices.curr10m > state.prices.prev10m ? "H" : "L";
+        const direction = state.prices.curr10m >= state.prices.prev10m ? "H" : "L";
         state.trend10m += direction;
         state.prices.prev10m = state.prices.curr10m;
 
