@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Live BTC Price</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding-top: 50px;
+      background-color: #f4f4f4;
+    }
+    h1 {
+      color: #333;
+    }
+    #price, #trend10min, #trend1min {
+      font-size: 20px;
+      font-weight: bold;
+      margin-top: 20px;
+    }
+    #price {
+      color: #007bff;
+    }
+    #trend10min, #trend1min {
+      color: #28a745;
+    }
+  </style>
+</head>
+<body>
+  <h1>BTC Live Price Monitor</h1>
+  <p id="price">Loading price...</p>
+  <p id="trend10min">Loading trend (10 min)...</p>
+  <p id="trend1min">Loading trend (1 min)...</p>
+
+  <script>
+    async function fetchPrice() {
+      try {
+        const response = await fetch("https://even-socket.onrender.com/price");
+        const data = await response.json();
+
+        // Update price and trends
+        document.getElementById("price").innerText =
+          `Live: $${data.live}, Prev: $${data.previous_price}, Curr: $${data.current_price}`;
+        
+        document.getElementById("trend10min").innerText =
+          `Trend 10min: ${data.trend10min || 'No data'}`;
+        
+        document.getElementById("trend1min").innerText =
+          `Trend 1min: ${data.trend1min || 'No data'}`;
+        
+      } catch (err) {
+        console.error("Failed to fetch price:", err);
+        document.getElementById("price").innerText = "Error fetching data.";
+        document.getElementById("trend10min").innerText = "Error fetching trend (10 min).";
+        document.getElementById("trend1min").innerText = "Error fetching trend (1 min).";
+      }
+    }
+
+    // Call the function to fetch data and update the page
+    fetchPrice();
+    setInterval(fetchPrice, 1000); // update every 1 second
+  </script>
+</body>
+</html>
