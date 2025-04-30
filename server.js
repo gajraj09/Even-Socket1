@@ -1,4 +1,3 @@
-
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
@@ -44,7 +43,6 @@ let state = {
 // -----------------------
 // Utility Functions
 // -----------------------
-
 function updateTime() {
   const now = new Date();
   state.time.minute = now.getMinutes();
@@ -61,10 +59,7 @@ async function fetchLatestTrends() {
     if (trendEntry) {
       trendString10m = trendEntry.trend || "";
       trendString1m = trendEntry.trend2 || "";
-      // console.log("Trend 10m:", trendString10m);
-      // console.log("Trend 1m:", trendString1m);
     } else {
-      console.log("No trends found for today.");
       trendString10m = "";
       trendString1m = "";
     }
@@ -96,7 +91,6 @@ async function saveTrendToDB({ trendType, value }) {
 // -----------------------
 // WebSocket Connections
 // -----------------------
-
 function connectWebSocket(url, onMessage) {
   const ws = new WebSocket(url);
 
@@ -117,8 +111,6 @@ function connectWebSocket(url, onMessage) {
 // -----------------------
 // Binance WebSocket Handlers
 // -----------------------
-
-// Live price
 connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@trade", (event) => {
   try {
     const data = JSON.parse(event);
@@ -128,17 +120,16 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@trade", (event) => {
   }
 });
 
-// 1-minute kline handler (odd trend)
 connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (event) => {
   try {
+    updateTime();
     const data = JSON.parse(event);
     const open = parseFloat(data.k.o).toFixed(2);
     const { minute, second } = state.time;
 
     if (minute % 10 === 0 && second > 2 && state.clocks.clock1m === 0) {
-        state.clocks.clock1m = 1;
+      state.clocks.clock1m = 1;
       state.prices.prev1m = open;
-    //   console.log("1m Prev:", open);
     }
 
     if (minute % 10 === 1 && second > 2 && state.clocks.clock1m === 1) {
@@ -149,12 +140,15 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
         const direction = state.prices.curr1m > state.prices.prev1m ? "H" : "L";
         state.trend1m += direction;
 
-        // console.log("1m Curr:", open, "→", direction);
-        await saveTrendToDB({ trendType: "trend2", value: state.trend1m });
+        // Use a small delay to avoid conflict with 10m save
+        setTimeout(() => {
+          saveTrendToDB({ trendType: "trend2", value: state.trend1m });
+        }, 1000); // 1 second delay
       }
     }
 
-    if (minute % 10 === 2 && second > 5) {
+    // Reset logic (handles drift better)
+    if (minute % 10 > 2) {
       state.clocks.clock1m = 0;
     }
   } catch (error) {
@@ -162,16 +156,15 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
   }
 });
 
-// 5-minute kline handler (even trend)
 connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (event) => {
   try {
+    updateTime();
     const data = JSON.parse(event);
     const open = parseFloat(data.k.o).toFixed(2);
     const { minute, second } = state.time;
 
     if (state.prices.prev10m === "0") {
       state.prices.prev10m = open;
-      // console.log("5m Init:", open);
     }
 
     if (minute % 10 === 0 && second > 2 && state.clocks.clock10m === 0) {
@@ -183,12 +176,14 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
         state.trend10m += direction;
         state.prices.prev10m = state.prices.curr10m;
 
-        // console.log("5m Curr:", open, "→", direction);
-        await saveTrendToDB({ trendType: "trend", value: state.trend10m });
+        // Save with a slight delay to prevent overlap with 1m
+        setTimeout(() => {
+          saveTrendToDB({ trendType: "trend", value: state.trend10m });
+        }, 2000); // 2 seconds delay
       }
     }
 
-    if (minute % 10 === 1 && second > 5) {
+    if (minute % 10 > 1) {
       state.clocks.clock10m = 0;
     }
   } catch (error) {
@@ -196,35 +191,13 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
   }
 });
 
-app.get('/callback-from-server2', (req, res) => {
-    // console.log('Received a call from Server 2');
-    res.send('Hello from Server 1!');
-});
-
-const callServer2 = () => {
-    setInterval(async () => {
-        try {
-            const response = await axios.get('https://odd-reviver.onrender.com/callback-from-server1');
-            // console.log(`Response from Server 2: ${response.data}`);
-        } catch (error) {
-            console.error('Error calling Server 2:', error.message);
-        }
-    }, 600000); // 60000 milliseconds = 1 minute
-};
-
-// Start the timer to update time and manage the start condition
-app.get("/", (req, res) => {
-    res.send(`Server is Live Now`); // Send a response to the client
-});
-
-// Start the timer to update time and manage the start condition
-app.get("/", (req, res) => {
-    res.send(`Server is Live Now`); // Send a response to the client
-});
-
 // -----------------------
 // Routes
 // -----------------------
+app.get("/", (req, res) => {
+  res.send(`Server is Live Now`);
+});
+
 app.get("/price", (req, res) => {
   res.json({
     live: state.live,
@@ -235,12 +208,26 @@ app.get("/price", (req, res) => {
   });
 });
 
+app.get("/callback-from-server2", (req, res) => {
+  res.send("Hello from Server 1!");
+});
+
+const callServer2 = () => {
+  setInterval(async () => {
+    try {
+      const response = await axios.get("https://odd-reviver.onrender.com/callback-from-server1");
+    } catch (error) {
+      console.error("Error calling Server 2:", error.message);
+    }
+  }, 600000); // 10 minutes
+};
+
 // -----------------------
 // Server Start
 // -----------------------
 const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
-  setInterval(updateTime, 1000);
+  setInterval(updateTime, 1000); // keep state.time fresh
   callServer2();
   console.log(`Server running on port ${PORT}`);
 });
