@@ -127,12 +127,12 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     const open = parseFloat(data.k.o).toFixed(2);
     const { minute, second } = state.time;
 
-    if (minute % 10 === 0 && second >= 1 && state.clocks.clock1m === 0) {
+    if (minute % 10 === 0 && second >= 3 && state.clocks.clock1m === 0) {
       state.clocks.clock1m = 1;
       state.prices.prev1m = open;
     }
 
-    if (minute % 10 === 1 && second >= 1 && state.clocks.clock1m === 1) {
+    if (minute % 10 === 1 && second >= 3 && state.clocks.clock1m === 1) {
       state.clocks.clock1m = 2;
       state.prices.curr1m = open;
 
@@ -148,7 +148,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     }
 
     // Reset logic (handles drift better)
-    if (minute % 10 > 2) {
+    if (minute % 10 > 5) {
       state.clocks.clock1m = 0;
     }
   } catch (error) {
@@ -167,7 +167,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
       state.prices.prev10m = open;
     }
 
-    if (minute % 10 === 0 && second >= 1 && state.clocks.clock10m === 0) {
+    if (minute % 10 === 0 && second >= 3 && state.clocks.clock10m === 0) {
       state.clocks.clock10m = 1;
       state.prices.curr10m = open;
 
@@ -183,7 +183,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
       }
     }
 
-    if (minute % 10 > 1) {
+    if (minute % 10 > 6) {
       state.clocks.clock10m = 0;
     }
   } catch (error) {
