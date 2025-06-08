@@ -155,7 +155,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
       }
     }
 
-    if (minute % 10 > 5) {
+    if (minute % 10 >= 2) {
       state.clocks.clock1m = 0;
     }
   } catch (error) {
@@ -195,7 +195,8 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
       }
     }
 
-    if (minute % 10 > 6) {
+    // Reset clock10m safely in the next few minutes
+    if (minute % 10 >= 2) {
       state.clocks.clock10m = 0;
     }
   } catch (error) {
@@ -243,6 +244,7 @@ server.listen(PORT, () => {
   callServer2();
   console.log(`Server running on port ${PORT}`);
 });
+
 
 
 // const express = require("express");
