@@ -232,7 +232,7 @@ const callServer2 = () => {
     } catch (error) {
       console.error("Error calling Server 2:", error.message);
     }
-  }, 600000); // every 10 minutes
+  },300000); // every 10 minutes
 };
 
 // -----------------------
