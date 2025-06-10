@@ -1,4 +1,3 @@
-
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
@@ -43,6 +42,11 @@ let state = {
 
 let lastTrendMinute1m = null;
 let lastTrendMinute10m = null;
+let lockTime1m = 0;
+let lockTime10m = 0;
+
+let trendString10m = "";
+let trendString1m = "";
 
 // -----------------------
 // Utility Functions
@@ -52,9 +56,6 @@ function updateTime() {
   state.time.minute = now.getMinutes();
   state.time.second = now.getSeconds();
 }
-
-let trendString10m = "";
-let trendString1m = "";
 
 async function fetchLatestTrends() {
   try {
@@ -77,8 +78,14 @@ async function fetchLatestTrends() {
 async function saveTrendToDB({ trendType, value }) {
   const date = new Date().toISOString().split("T")[0];
   try {
-    let trendEntry = await Trend.findOne({ date });
+    if (
+      (trendType === "trend" && value === trendString10m) ||
+      (trendType === "trend2" && value === trendString1m)
+    ) {
+      return; // skip if no actual change
+    }
 
+    let trendEntry = await Trend.findOne({ date });
     if (trendEntry) {
       trendEntry[trendType] = value;
     } else {
@@ -86,6 +93,7 @@ async function saveTrendToDB({ trendType, value }) {
     }
 
     await trendEntry.save();
+    console.log(`[${new Date().toISOString()}] Saved ${trendType}: ${value}`);
     await fetchLatestTrends();
   } catch (error) {
     console.error(`Error saving ${trendType} to DB:`, error);
@@ -130,6 +138,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     const data = JSON.parse(event);
     const open = parseFloat(data.k.o).toFixed(2);
     const { minute, second } = state.time;
+    const now = Date.now();
 
     if (minute % 10 === 0 && second >= 3 && state.clocks.clock1m === 0) {
       state.clocks.clock1m = 1;
@@ -140,11 +149,11 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
       minute % 10 === 1 &&
       second >= 3 &&
       state.clocks.clock1m === 1 &&
-      lastTrendMinute1m !== minute
+      now - lockTime1m > 8000
     ) {
-      lastTrendMinute1m = minute;
-      state.clocks.clock1m = 0;
+      state.clocks.clock1m = 2;
       state.prices.curr1m = open;
+      lockTime1m = now;
 
       if (state.prices.curr1m !== state.prices.prev1m) {
         const direction = state.prices.curr1m >= state.prices.prev1m ? "H" : "L";
@@ -152,10 +161,14 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
 
         setTimeout(() => {
           saveTrendToDB({ trendType: "trend2", value: state.trend1m });
+          lastTrendMinute1m = minute;
         }, 1000);
       }
     }
 
+    if (minute % 10 >= 2) {
+      state.clocks.clock1m = 0;
+    }
   } catch (error) {
     console.error("Error handling 1m kline:", error);
   }
@@ -167,30 +180,36 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
     const data = JSON.parse(event);
     const open = parseFloat(data.k.o).toFixed(2);
     const { minute, second } = state.time;
+    const now = Date.now();
 
-   if (minute % 10 === 0 && second >= 3 && state.clocks.clock10m === 0) {
-      state.clocks.clock10m = 1;
+    if (state.prices.prev10m === "0") {
       state.prices.prev10m = open;
     }
 
     if (
-      minute % 10 === 1 &&
+      minute % 10 === 0 &&
       second >= 3 &&
-      state.clocks.clock10m === 1 &&
-      lastTrendMinute10m !== minute
+      state.clocks.clock10m === 0 &&
+      now - lockTime10m > 8000
     ) {
-      lastTrendMinute10m = minute;
-      state.clocks.clock10m = 0;
+      state.clocks.clock10m = 1;
       state.prices.curr10m = open;
+      lockTime10m = now;
 
       if (state.prices.curr10m !== state.prices.prev10m) {
         const direction = state.prices.curr10m >= state.prices.prev10m ? "H" : "L";
         state.trend10m += direction;
+        state.prices.prev10m = state.prices.curr10m;
 
         setTimeout(() => {
-          saveTrendToDB({ trendType: "trend2", value: state.trend10m });
+          saveTrendToDB({ trendType: "trend", value: state.trend10m });
+          lastTrendMinute10m = minute;
         }, 2000);
       }
+    }
+
+    if (minute % 10 >= 2) {
+      state.clocks.clock10m = 0;
     }
   } catch (error) {
     console.error("Error handling 5m kline:", error);
@@ -225,7 +244,7 @@ const callServer2 = () => {
     } catch (error) {
       console.error("Error calling Server 2:", error.message);
     }
-  },300000); // every 10 minutes
+  }, 300000); // every 10 minutes
 };
 
 // -----------------------
@@ -237,6 +256,7 @@ server.listen(PORT, () => {
   callServer2();
   console.log(`Server running on port ${PORT}`);
 });
+
 
 //////
 // const express = require("express");
