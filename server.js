@@ -42,8 +42,8 @@ let lastTrendMinute10m = null;
 let lockTime1m = 0;
 let lockTime10m = 0;
 
-let trendString10m = "LLHHHHHLHLHHLLLLHLHHLLHHLHLLLHLLLL";
-let trendString1m = "LHHLLHHLLHHHHLLHHHLHHHLHHLLHLHLLLL";
+let trendString10m = "";
+let trendString1m = "";
 
 function updateTime() {
   const now = new Date();
@@ -165,7 +165,6 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
          const trimmedTrend = trendString10m.slice(0, -1); // remove last character
     setTimeout(() => {
       saveTrendToDB({ trendType: "trend", value: trimmedTrend });
-      lastTrendMinute10m = minute;
     }, 2000);
       }
     }
