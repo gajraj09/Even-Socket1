@@ -42,8 +42,8 @@ let lastTrendMinute10m = null;
 let lockTime1m = 0;
 let lockTime10m = 0;
 
-let trendString10m = "";
-let trendString1m = "";
+let trendString10m = "LLHHHHHLHLHHLLLLHLHHLLHHLHLLLHLLLL";
+let trendString1m = "LHHLLHHLLHHHHLLHHHLHHHLHHLLHLHLLLL";
 
 function updateTime() {
   const now = new Date();
@@ -159,6 +159,15 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
 
     if (minute % 10 >= 2) {
       state.clocks.clock1m = 0;
+    }
+    if (minute % 10 >= 5 && trendString1m.length>0) {
+      if(trendString1m.length!=trendString10m.length){
+         const trimmedTrend = trendString10m.slice(0, -1); // remove last character
+    setTimeout(() => {
+      saveTrendToDB({ trendType: "trend", value: trimmedTrend });
+      lastTrendMinute10m = minute;
+    }, 2000);
+      }
     }
   } catch (error) {
     console.error("Error handling 1m kline:", error);
