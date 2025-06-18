@@ -129,7 +129,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     const now = Date.now();
 
     // Reset clock1m after minute >= 2 to allow future updates
-    if (minute % 10 >= 2 && state.clocks.clock1m !== 0) {
+    if (minute % 10 >= 4 && state.clocks.clock1m !== 0) {
       state.clocks.clock1m = 0;
       // console.log(`[${minute}:${second}] Reset clock1m`);
     }
@@ -145,25 +145,22 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     if (
       minute % 10 === 1 &&
       second >= 3 &&
-      state.clocks.clock1m === 1 &&
-      now - lockTime1m > 8000
+      state.clocks.clock1m === 1
     ) {
       state.clocks.clock1m = 2;
       state.prices.curr1m = open;
-      lockTime1m = now;
       // console.log(`[${minute}:${second}] Set curr1m = ${open}`);
 
       const prev = parseFloat(state.prices.prev1m);
       const curr = parseFloat(state.prices.curr1m);
 
-      if (!isNaN(prev) && !isNaN(curr) && prev !== curr) {
+      if ( prev !== curr) {
         const direction = curr >= prev ? "H" : "L";
         state.trend1m += direction;
         // console.log(`[${minute}:${second}] Trend1m += ${direction} (${prev} -> ${curr})`);
 
         setTimeout(() => {
           saveTrendToDB({ trendType: "trend2", value: state.trend1m });
-          lastTrendMinute1m = minute;
         }, 2000);
       } else {
         console.warn(`[${minute}:${second}] No trend update: prev=${prev}, curr=${curr}`);
