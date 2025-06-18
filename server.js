@@ -87,7 +87,7 @@ async function saveTrendToDB({ trendType, value }) {
     }
 
     await trendEntry.save();
-    console.log(`[${new Date().toISOString()}] Saved ${trendType}: ${value}`);
+    // console.log(`[${new Date().toISOString()}] Saved ${trendType}: ${value}`);
     await fetchLatestTrends();
   } catch (error) {
     console.error(`Error saving ${trendType} to DB:`, error);
@@ -128,11 +128,20 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     const { minute, second } = state.time;
     const now = Date.now();
 
+    // Reset clock1m after minute >= 2 to allow future updates
+    if (minute % 10 >= 2 && state.clocks.clock1m !== 0) {
+      state.clocks.clock1m = 0;
+      // console.log(`[${minute}:${second}] Reset clock1m`);
+    }
+
+    // Set previous price at start of new 10-minute block
     if (minute % 10 === 0 && second >= 3 && state.clocks.clock1m === 0) {
       state.clocks.clock1m = 1;
       state.prices.prev1m = open;
+      // console.log(`[${minute}:${second}] Set prev1m = ${open}`);
     }
 
+    // Set current price on next minute and determine trend
     if (
       minute % 10 === 1 &&
       second >= 3 &&
@@ -142,36 +151,29 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
       state.clocks.clock1m = 2;
       state.prices.curr1m = open;
       lockTime1m = now;
+      // console.log(`[${minute}:${second}] Set curr1m = ${open}`);
 
-      const prev = parseFloat(state.prices.prev1m).toFixed(2);
-      const curr = parseFloat(state.prices.curr1m).toFixed(2);
+      const prev = parseFloat(state.prices.prev1m);
+      const curr = parseFloat(state.prices.curr1m);
 
-      if (prev !== curr) {
-        const direction = parseFloat(curr) >= parseFloat(prev) ? "H" : "L";
+      if (!isNaN(prev) && !isNaN(curr) && prev !== curr) {
+        const direction = curr >= prev ? "H" : "L";
         state.trend1m += direction;
+        // console.log(`[${minute}:${second}] Trend1m += ${direction} (${prev} -> ${curr})`);
 
         setTimeout(() => {
           saveTrendToDB({ trendType: "trend2", value: state.trend1m });
           lastTrendMinute1m = minute;
-        }, 1000);
-      }
-    }
-
-    if (minute % 10 >= 2) {
-      state.clocks.clock1m = 0;
-    }
-    if (minute % 10 >= 5 && trendString1m.length>0) {
-      if(trendString1m.length!=trendString10m.length){
-         const trimmedTrend = trendString10m.slice(0, -1); // remove last character
-    setTimeout(() => {
-      saveTrendToDB({ trendType: "trend", value: trimmedTrend });
-    }, 2000);
+        }, 2000);
+      } else {
+        console.warn(`[${minute}:${second}] No trend update: prev=${prev}, curr=${curr}`);
       }
     }
   } catch (error) {
     console.error("Error handling 1m kline:", error);
   }
 });
+
 
 connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (event) => {
   try {
