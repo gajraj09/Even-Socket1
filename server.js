@@ -154,7 +154,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
       const prev = parseFloat(state.prices.prev1m);
       const curr = parseFloat(state.prices.curr1m);
 
-      if ( prev !== curr) {
+      if ( prev !== curr || prev === curr ) {
         const direction = curr >= prev ? "H" : "L";
         state.trend1m += direction;
         // console.log(`[${minute}:${second}] Trend1m += ${direction} (${prev} -> ${curr})`);
