@@ -1,4 +1,3 @@
-// BTC Trend Tracker Server
 const express = require("express");
 const http = require("http");
 const WebSocket = require("ws");
@@ -17,6 +16,14 @@ app.use(express.static(path.join(__dirname, "public")));
 
 const mongoUri = process.env.MONGODB_URI;
 mongoose.connect(mongoUri, { useNewUrlParser: true, useUnifiedTopology: true });
+
+function getISTDate() {
+  const now = new Date();
+  const istOffset = 5.5 * 60; // 330 minutes
+  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
+  const istTime = new Date(utc + 60000 * istOffset);
+  return istTime.toISOString().split("T")[0];
+}
 
 let state = {
   live: "0",
@@ -40,10 +47,11 @@ let state = {
 
 let lastTrendMinute1m = null;
 let lastTrendMinute10m = null;
+let lockTime1m = 0;
 let lockTime10m = 0;
+
 let trendString10m = "";
 let trendString1m = "";
-let lastTrendDate = new Date().toISOString().split("T")[0];
 
 function updateTime() {
   const now = new Date();
@@ -51,32 +59,35 @@ function updateTime() {
   state.time.second = now.getSeconds();
 }
 
-async function fetchTodayTrends() {
-  const date = new Date().toISOString().split("T")[0];
+async function fetchLatestTrends() {
   try {
+    const date = getISTDate();
     const trendEntry = await Trend.findOne({ date });
     if (trendEntry) {
       trendString10m = trendEntry.trend || "";
       trendString1m = trendEntry.trend2 || "";
-      state.trend10m = trendString10m;
-      state.trend1m = trendString1m;
     } else {
       trendString10m = "";
       trendString1m = "";
-      state.trend10m = "";
-      state.trend1m = "";
     }
   } catch (error) {
-    console.error("Error fetching today's trends:", error);
+    console.error("Error fetching latest trends:", error);
+    trendString10m = "";
+    trendString1m = "";
   }
 }
 
 async function saveTrendToDB({ trendType, value }) {
-  const date = new Date().toISOString().split("T")[0];
+  const date = getISTDate();
   try {
-    let trendEntry = await Trend.findOne({ date });
-    if (trendEntry && trendEntry[trendType] === value) return;
+    if (
+      (trendType === "trend" && value === trendString10m) ||
+      (trendType === "trend2" && value === trendString1m)
+    ) {
+      return;
+    }
 
+    let trendEntry = await Trend.findOne({ date });
     if (trendEntry) {
       trendEntry[trendType] = value;
     } else {
@@ -84,28 +95,15 @@ async function saveTrendToDB({ trendType, value }) {
     }
 
     await trendEntry.save();
-    if (trendType === "trend") trendString10m = value;
-    if (trendType === "trend2") trendString1m = value;
+    await fetchLatestTrends();
   } catch (error) {
     console.error(`Error saving ${trendType} to DB:`, error);
   }
 }
 
-function dailyTrendResetCheck() {
-  const today = new Date().toISOString().split("T")[0];
-  if (today !== lastTrendDate) {
-    console.log("New day detected, resetting trend state.");
-    lastTrendDate = today;
-    state.trend10m = "";
-    state.trend1m = "";
-    trendString10m = "";
-    trendString1m = "";
-    fetchTodayTrends();
-  }
-}
-
 function connectWebSocket(url, onMessage) {
   const ws = new WebSocket(url);
+
   ws.on("open", () => console.log(`Connected to ${url}`));
   ws.on("message", onMessage);
   ws.on("error", (err) => {
@@ -116,6 +114,7 @@ function connectWebSocket(url, onMessage) {
     console.warn("WebSocket closed. Reconnecting...");
     setTimeout(() => connectWebSocket(url, onMessage), 5000);
   });
+
   return ws;
 }
 
@@ -134,6 +133,11 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
     const data = JSON.parse(event);
     const open = parseFloat(data.k.o).toFixed(2);
     const { minute, second } = state.time;
+    const now = Date.now();
+
+    if (minute % 10 >= 4 && state.clocks.clock1m !== 0) {
+      state.clocks.clock1m = 0;
+    }
 
     if (minute % 10 === 0 && second >= 3 && state.clocks.clock1m === 0) {
       state.clocks.clock1m = 1;
@@ -146,13 +150,15 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
 
       const prev = parseFloat(state.prices.prev1m);
       const curr = parseFloat(state.prices.curr1m);
-      const direction = curr >= prev ? "H" : "L";
-      state.trend1m += direction;
-      setTimeout(() => saveTrendToDB({ trendType: "trend2", value: state.trend1m }), 2000);
-    }
 
-    if (minute % 10 >= 5) {
-      state.clocks.clock1m = 0;
+      if (prev !== curr || prev === curr) {
+        const direction = curr >= prev ? "H" : "L";
+        state.trend1m += direction;
+
+        setTimeout(() => {
+          saveTrendToDB({ trendType: "trend2", value: state.trend1m });
+        }, 2000);
+      }
     }
   } catch (error) {
     console.error("Error handling 1m kline:", error);
@@ -176,12 +182,19 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
       state.prices.curr10m = open;
       lockTime10m = now;
 
-      const prev = parseFloat(state.prices.prev10m);
-      const curr = parseFloat(state.prices.curr10m);
-      const direction = curr >= prev ? "H" : "L";
-      state.trend10m += direction;
-      state.prices.prev10m = state.prices.curr10m;
-      setTimeout(() => saveTrendToDB({ trendType: "trend", value: state.trend10m }), 2000);
+      const prev = parseFloat(state.prices.prev10m).toFixed(2);
+      const curr = parseFloat(state.prices.curr10m).toFixed(2);
+
+      if (prev !== curr) {
+        const direction = parseFloat(curr) >= parseFloat(prev) ? "H" : "L";
+        state.trend10m += direction;
+        state.prices.prev10m = state.prices.curr10m;
+
+        setTimeout(() => {
+          saveTrendToDB({ trendType: "trend", value: state.trend10m });
+          lastTrendMinute10m = minute;
+        }, 2000);
+      }
     }
 
     if (minute % 10 >= 2) {
@@ -193,7 +206,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
 });
 
 app.get("/", (req, res) => {
-  res.send("Server is Live Now");
+  res.send(`Server is Live Now`);
 });
 
 app.get("/price", (req, res) => {
@@ -217,14 +230,12 @@ const callServer2 = () => {
     } catch (error) {
       console.error("Error calling Server 2:", error.message);
     }
-  }, 300000); // 5 minutes
+  }, 300000);
 };
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, async () => {
-  await fetchTodayTrends();
+server.listen(PORT, () => {
   setInterval(updateTime, 1000);
-  setInterval(dailyTrendResetCheck, 60000);
   callServer2();
   console.log(`Server running on port ${PORT}`);
 });
