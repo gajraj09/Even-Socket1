@@ -51,6 +51,7 @@ let lockTime10m = 0;
 
 let trendString10m = "";
 let trendString1m = "";
+const allPast10mTrends = [];
 
 function updateTime() {
   const now = new Date();
@@ -92,6 +93,22 @@ async function fetchLatestTrends() {
     trendString1m = "";
     state.trend10m = "";
     state.trend1m = "";
+  }
+}
+
+async function fetchAllPrevious10mTrends() {
+  try {
+    const trends = await Trend.find({ trend: { $exists: true } }).sort({ date: 1 });
+
+    for (const t of trends) {
+      if (t.date && t.trend) {
+        allPast10mTrends.push({ date: t.date, trend: t.trend });
+      }
+    }
+
+    console.log("Loaded previous 10m trends:", allPast10mTrends.length);
+  } catch (err) {
+    console.error("Error fetching all 10m trends:", err);
   }
 }
 
@@ -202,7 +219,7 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
       const prev = parseFloat(state.prices.prev10m).toFixed(2);
       const curr = parseFloat(state.prices.curr10m).toFixed(2);
 
-      if (prev !== curr) {
+      if (prev !== curr||prev === curr) {
         const direction = parseFloat(curr) >= parseFloat(prev) ? "H" : "L";
         trendString10m += direction;
         state.trend10m = trendString10m;
@@ -236,6 +253,10 @@ app.get("/price", (req, res) => {
   });
 });
 
+app.get("/all-trends", (req, res) => {
+  res.json(allPast10mTrends);
+});
+
 app.get("/callback-from-server2", (req, res) => {
   res.send("Hello from Server 1!");
 });
@@ -251,9 +272,10 @@ const callServer2 = () => {
 };
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   setInterval(updateTime, 1000);
-  fetchLatestTrends();
+  await fetchLatestTrends();
+  await fetchAllPrevious10mTrends();
   callServer2();
   console.log(`Server running on port ${PORT}`);
 });
