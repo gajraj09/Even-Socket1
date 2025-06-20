@@ -187,11 +187,11 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_1m", async (eve
       const curr = parseFloat(state.prices.curr1m);
 
       const direction = curr >= prev ? "H" : "L";
-      trendString1m += direction;
       state.trend1m = trendString1m;
+      state.trend1m += direction;
 
       setTimeout(() => {
-        saveTrendToDB({ trendType: "trend2", value: trendString1m });
+        saveTrendToDB({ trendType: "trend2", value: state.trend1m });
       }, 2000);
     }
   } catch (error) {
@@ -221,12 +221,12 @@ connectWebSocket("wss://stream.binance.com:9443/ws/btcusdt@kline_5m", async (eve
 
       if (prev !== curr||prev === curr) {
         const direction = parseFloat(curr) >= parseFloat(prev) ? "H" : "L";
-        trendString10m += direction;
         state.trend10m = trendString10m;
+        state.trend10m += direction;
         state.prices.prev10m = state.prices.curr10m;
 
         setTimeout(() => {
-          saveTrendToDB({ trendType: "trend", value: trendString10m });
+          saveTrendToDB({ trendType: "trend", value: state.trend10m });
         }, 2000);
       }
     }
