@@ -131,6 +131,7 @@ async function saveTrendToDB({ trendType, value }) {
 
     await trendEntry.save();
     await fetchLatestTrends();
+    await fetchAllPrevious10mTrends();
   } catch (error) {
     console.error(`Error saving ${trendType} to DB:`, error);
   }
