@@ -257,19 +257,21 @@ app.get("/price", (req, res) => {
 app.get("/all-trends", (req, res) => {
   res.json(allPast10mTrends);
 });
-
 app.get("/callback-from-server2", (req, res) => {
   res.send("Hello from Server 1!");
 });
 
+
+
 const callServer2 = () => {
-  setInterval(async () => {
-    try {
-      await axios.get("https://odd-reviver.onrender.com/callback-from-server1");
-    } catch (error) {
-      console.error("Error calling Server 2:", error.message);
-    }
-  }, 300000);
+    setInterval(async () => {
+        try {
+            const response = await axios.get('https://odd-socket-njs9.onrender.com/callback-from-server2'); // Ensure this endpoint exists in Server 1
+            // console.log(`Response from Server 1: ${response.data}`);
+        } catch (error) {
+            console.error('Error calling from odd Server 1:', error.message);
+        }
+    },400000); // 60000 milliseconds = 1 minute
 };
 
 const PORT = process.env.PORT || 5000;
