@@ -266,7 +266,7 @@ app.get("/callback-from-server2", (req, res) => {
 const callServer2 = () => {
     setInterval(async () => {
         try {
-            const response = await axios.get('https://odd-reviver11.onrender.com/callback-from-server2'); // Ensure this endpoint exists in Server 1
+            const response = await axios.get('https://odd-reviver11.onrender.com/callback-from-server1'); // Ensure this endpoint exists in Server 1
             // console.log(`Response from Server 1: ${response.data}`);
         } catch (error) {
             console.error('Error calling from odd Server 1:', error.message);
